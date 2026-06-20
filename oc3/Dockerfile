@@ -1,7 +1,7 @@
 FROM php:8.2-apache
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype-dev libjpeg-dev libpng-dev libwebp-dev \
-    libxpm-dev libzip-dev libicu-dev libldap2-dev \
+    libxpm-dev libzip-dev libicu-dev libldap2-dev libxml2-dev libcurl4-openssl-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-xpm \
     && docker-php-ext-install -j$(nproc) gd mysqli pdo_mysql intl zip bcmath soap ldap \
     && pecl install apcu redis imagick \
