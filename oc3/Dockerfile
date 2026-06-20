@@ -19,4 +19,7 @@ RUN { \
     echo '  CustomLog /dev/stdout combined'; \
     echo '</VirtualHost>'; \
     } > /etc/apache2/sites-available/000-default.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 WORKDIR /var/www/html/htdocs
+CMD ["/entrypoint.sh"]
