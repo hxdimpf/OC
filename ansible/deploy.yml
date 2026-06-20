@@ -431,7 +431,7 @@
               restart: unless-stopped
               volumes:
                 - {{ repo_base }}/oc6:/app
-                - /app/node_modules
+              command: sh -c "npm install --silent && exec node app.js"
               environment:
                 PORT: "3000"
                 DATABASE_URL: mysql://oc:{{ dbpass }}@db:3306/oc
