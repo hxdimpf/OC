@@ -1,0 +1,487 @@
+---
+- name: OC Dev Stack Deployment
+  hosts: oc_test
+  become: true
+  vars:
+    domain_suffix: baiti.net
+    github_org: hxdimpf
+    branch: dev-hx
+    repo_base: /opt/repos
+    stacks_base: /opt/stacks
+
+  tasks:
+    # ── Prerequisites ────────────────────────────────────
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      apt:
+        name: [docker.io, git, curl, unzip, sqlite3, php-cli, php-xml, php-mbstring]
+        state: latest
+
+    - name: Start Docker
+      systemd: name=docker state=started enabled=true
+
+    - name: Install Composer
+      shell: |
+        if [ ! -f /usr/local/bin/composer ]; then
+          curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+        fi
+      args:
+        creates: /usr/local/bin/composer
+
+    - name: Install docker compose plugin
+      shell: |
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/debian/gpg | tee /etc/apt/keyrings/docker.asc >/dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" > /etc/apt/sources.list.d/docker.list
+        apt-get update -qq
+        dpkg --force-all -r docker-buildx 2>/dev/null || true
+        apt-get install -y -qq docker-compose-plugin docker-buildx-plugin
+      args:
+        creates: /usr/libexec/docker/cli-plugins/docker-compose
+
+    # ── Docker network ──────────────────────────────────
+    - name: Create shared Docker network
+      shell: docker network create oc 2>/dev/null || true
+
+    # ── Clone repos ─────────────────────────────────────
+    - name: Clone repository
+      git:
+        repo: "https://github.com/{{ github_org }}/{{ item }}.git"
+        dest: "{{ repo_base }}/{{ item | lower }}"
+        version: "{{ branch }}"
+        force: true
+      loop: [OC3, OC4, oc5, okapi]
+      register: git_clone
+      retries: 3
+      delay: 5
+
+    # ── DB password ─────────────────────────────────────
+    - name: Generate DB password
+      set_fact:
+        dbpass: "{{ lookup('password', '/dev/null length=32 chars=hexdigits') }}"
+
+    - name: Create stack directories
+      file:
+        path: "{{ stacks_base }}/{{ item }}"
+        state: directory
+      loop: [dockge, npm, mariadb, oc3, oc4, oc5, okapi]
+
+    # ── Write compose files ─────────────────────────────
+    - name: Dockge compose
+      copy:
+        dest: "{{ stacks_base }}/dockge/docker-compose.yml"
+        content: |
+          name: dockge
+          services:
+            dockge:
+              image: louislam/dockge:latest
+              restart: unless-stopped
+              ports: ["5001:5001"]
+              volumes:
+                - /var/run/docker.sock:/var/run/docker.sock:ro
+                - dockge_data:/app/data
+                - /opt/stacks:/opt/stacks:ro
+              environment:
+                DOCKGE_STACKS_DIR: /opt/stacks
+              networks: [oc]
+          volumes:
+            dockge_data:
+          networks:
+            oc:
+              external: true
+
+    - name: NPM compose
+      copy:
+        dest: "{{ stacks_base }}/npm/docker-compose.yml"
+        content: |
+          name: npm
+          services:
+            nginx-proxy-manager:
+              image: jc21/nginx-proxy-manager:latest
+              restart: unless-stopped
+              ports: ["80:80", "443:443", "81:81"]
+              volumes: [npm_data:/data, npm_letsencrypt:/etc/letsencrypt]
+              networks: [oc]
+          volumes:
+            npm_data:
+            npm_letsencrypt:
+          networks:
+            oc:
+              external: true
+
+    - name: MariaDB compose
+      copy:
+        dest: "{{ stacks_base }}/mariadb/docker-compose.yml"
+        content: |
+          name: mariadb
+          services:
+            db:
+              image: mariadb:10.11
+              restart: unless-stopped
+              environment:
+                MARIADB_ROOT_PASSWORD: {{ dbpass }}
+                MARIADB_DATABASE: oc
+                MARIADB_USER: oc
+                MARIADB_PASSWORD: {{ dbpass }}
+              volumes: [mariadb_data:/var/lib/mysql]
+              networks: [oc]
+              healthcheck:
+                test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+          volumes:
+            mariadb_data:
+          networks:
+            oc:
+              external: true
+
+    - name: OC3 compose
+      copy:
+        dest: "{{ stacks_base }}/oc3/docker-compose.yml"
+        content: |
+          name: oc3
+          services:
+            oc3:
+              image: shinsenter/php:8.2-fpm-apache
+              restart: unless-stopped
+              volumes:
+                - {{ repo_base }}/oc3:/var/www/html
+                - {{ repo_base }}/oc3/.docker/zzz-oc3.ini:/usr/local/etc/php/conf.d/zzz-oc3.ini:ro
+              environment:
+                OC_DB_HOST: db
+                OC_DB_NAME: oc
+                OC_DB_USER: oc
+                OC_DB_PASS: {{ dbpass }}
+              expose: ["80"]
+              networks: [oc]
+          networks:
+            oc:
+              external: true
+
+    - name: OC4 compose
+      copy:
+        dest: "{{ stacks_base }}/oc4/docker-compose.yml"
+        content: |
+          name: oc4
+          services:
+            oc4:
+              image: shinsenter/php:8.4-fpm-apache
+              restart: unless-stopped
+              volumes:
+                - {{ repo_base }}/oc4:/var/www/html
+              environment:
+                APACHE_DOCUMENT_ROOT: /var/www/html/public
+                APP_ENV: dev
+                APP_DEBUG: "1"
+                DATABASE_URL: mysql://oc:{{ dbpass }}@db:3306/oc?serverVersion=mariadb-10.11.16
+              expose: ["80"]
+              networks: [oc]
+          networks:
+            oc:
+              external: true
+
+    - name: OC5 compose
+      copy:
+        dest: "{{ stacks_base }}/oc5/docker-compose.yml"
+        content: |
+          name: oc5
+          services:
+            oc5:
+              image: node:22-alpine
+              restart: unless-stopped
+              working_dir: /app
+              volumes:
+                - {{ repo_base }}/oc5:/app
+              command: sh -c "npm install --silent && exec node app.js"
+              environment:
+                PORT: "3000"
+                DATABASE_URL: mysql://oc:{{ dbpass }}@db:3306/oc
+                NODE_ENV: development
+              expose: ["3000"]
+              networks: [oc]
+          networks:
+            oc:
+              external: true
+
+    - name: OKAPI compose
+      copy:
+        dest: "{{ stacks_base }}/okapi/docker-compose.yml"
+        content: |
+          name: okapi
+          services:
+            okapi:
+              image: shinsenter/php:8.2-fpm-apache
+              restart: unless-stopped
+              volumes:
+                - {{ repo_base }}/okapi:/var/www/html
+              environment:
+                APACHE_DOCUMENT_ROOT: /var/www/html/okapi
+                OKAPI_STANDALONE: "1"
+                OKAPI_DB_HOST: db
+                OKAPI_DB_NAME: oc
+                OKAPI_DB_USER: oc
+                OKAPI_DB_PASS: {{ dbpass }}
+              expose: ["80"]
+              networks: [oc]
+          networks:
+            oc:
+              external: true
+
+    # ── OC3 config ──────────────────────────────────────
+    - name: OC3 cache directories
+      file:
+        path: "{{ repo_base }}/oc3/{{ item }}"
+        state: directory
+        mode: "0777"
+      loop:
+        - var/cache2/labels
+        - var/cache2/smarty/cache
+        - var/cache2/smarty/compiled
+        - images/uploads
+
+    - name: OC3 docker directory
+      file:
+        path: "{{ repo_base }}/oc3/.docker"
+        state: directory
+
+    - name: OC3 PHP ini
+      copy:
+        dest: "{{ repo_base }}/oc3/.docker/zzz-oc3.ini"
+        content: |
+          display_errors = Off
+          display_startup_errors = Off
+          error_reporting = E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED
+
+    - name: OC3 settings-dev.inc.php
+      shell: |
+        cp {{ repo_base }}/oc3/config2/settings-sample-dev.inc.php {{ repo_base }}/oc3/config2/settings-dev.inc.php
+        sed -i "s|require __DIR__ . '/settings-dev.inc.php';|// standalone|" {{ repo_base }}/oc3/config2/settings-dev.inc.php
+        sed -i 's|opencaching.ddev.site|oc3.{{ domain_suffix }}|g' {{ repo_base }}/oc3/config2/settings-dev.inc.php
+        sed -i 's|try-opencaching.ddev.site|oc4.{{ domain_suffix }}|g' {{ repo_base }}/oc3/config2/settings-dev.inc.php
+        sed -i "s|getenv('DDEV_USER')|'www-data'|g" {{ repo_base }}/oc3/config2/settings-dev.inc.php
+      args:
+        creates: "{{ repo_base }}/oc3/config2/settings-dev.inc.php"
+
+    - name: OC3 settings.inc.php
+      copy:
+        dest: "{{ repo_base }}/oc3/config2/settings.inc.php"
+        content: |
+          <?php
+          ini_set('display_errors', '0');
+          error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
+          $dev_basepath = '/var/www/html/';
+          $dev_codepath = '*';
+          $dev_baseurl = 'http://oc3.{{ domain_suffix }}/';
+          if (defined('HTTPS_ENABLED')) { $opt['page']['https']['mode'] = HTTPS_ENABLED; }
+          $opt['httpd']['user'] = 'www-data';
+          $opt['httpd']['group'] = 'www-data';
+          $debug_startpage_news = false;
+          require __DIR__ . '/settings-dev.inc.php';
+          $opt['db']['servername'] = 'db';
+          $opt['db']['username'] = 'oc';
+          $opt['db']['password'] = '{{ dbpass }}';
+          $opt['db']['pconnect'] = false;
+          $opt['db']['maintenance_user'] = 'oc';
+          $opt['db']['maintenance_password'] = '{{ dbpass }}';
+          $opt['db']['placeholder']['db'] = 'oc';
+          $opt['db']['placeholder']['tmpdb'] = 'octmp';
+          $opt['page']['domain'] = 'oc3.{{ domain_suffix }}';
+          $opt['page']['https']['mode'] = HTTPS_DISABLED;
+          $opt['page']['https']['is_default'] = false;
+          $opt['page']['showsocialmedia'] = false;
+          $opt['page']['showdonations'] = false;
+          $opt['mail']['from'] = 'noreply@test.opencaching.de';
+          $opt['mail']['subject'] = '[oc3.{{ domain_suffix }}] ';
+          $opt['session']['cookiename'] = 'ocdevelopment';
+          $opt['session']['domain'] = '.{{ domain_suffix }}';
+          set_absolute_urls($opt, 'http://oc3.{{ domain_suffix }}/', 'opencaching.de', 2);
+          $opt['new_ui']['domain'] = 'oc4.{{ domain_suffix }}';
+          $opt['debug'] = DEBUG_NO;
+          $opt['tracking']['googleAnalytics'] = '';
+
+    - name: OC3 parameters.yml
+      copy:
+        dest: "{{ repo_base }}/oc3/app/config/parameters.yml"
+        content: |
+          parameters:
+              database_host: db
+              database_port: ~
+              database_name: oc
+              database_user: oc
+              database_password: {{ dbpass }}
+              mailer_transport: smtp
+              mailer_host: localhost
+              mailer_port: 1025
+              mailer_user: null
+              mailer_password: null
+              mailer_auth_mode: login
+              secret: ThisTokenIsNotSoSecretChangeIt
+              api_secret: ThisTokenIsNotSoSecretChangeIt
+
+    # ── OC4 config ──────────────────────────────────────
+    - name: OC4 .env.local
+      copy:
+        dest: "{{ repo_base }}/oc4/.env.local"
+        content: |
+          APP_DEBUG=1
+          APP_ENV=dev
+          APP_SECRET=4d60f440e3bcaa3022a86681d24e54a4
+          DATABASE_URL=mysql://oc:{{ dbpass }}@db:3306/oc?serverVersion=mariadb-10.11.16
+
+    - name: OC4 var directory
+      file:
+        path: "{{ repo_base }}/oc4/var"
+        state: directory
+        mode: "0777"
+
+    # ── OKAPI directories ────────────────────────────────
+    - name: OKAPI var directory
+      file:
+        path: "{{ repo_base }}/okapi/var/okapi"
+        state: directory
+        mode: "0777"
+
+    # ── Composer install ────────────────────────────────
+    - name: Install OC4 composer deps
+      shell: |
+        cd {{ repo_base }}/oc4
+        composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
+      ignore_errors: true
+
+    - name: Install OKAPI composer deps
+      shell: |
+        cd {{ repo_base }}/okapi/okapi
+        composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
+      ignore_errors: true
+
+    # ── Start stacks ────────────────────────────────────
+    - name: Start Dockge
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/dockge"
+
+    - name: Start NPM
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/npm"
+
+    - name: Start MariaDB
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/mariadb"
+
+    - name: Wait for MariaDB healthy
+      shell: |
+        for i in $(seq 1 60); do
+          docker inspect mariadb-db-1 --format '{{ '{{' }}.State.Health.Status{{ '}}' }}' 2>/dev/null | grep -q healthy && exit 0
+          sleep 2
+        done
+        exit 1
+
+    - name: Start OC3
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/oc3"
+
+    - name: Start OC4
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/oc4"
+
+    - name: Start OC5
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/oc5"
+
+    - name: Start OKAPI
+      command: docker compose up -d --quiet-pull
+      args:
+        chdir: "{{ stacks_base }}/okapi"
+
+    # OC3 composer must run inside its container (host PHP 8.4 can't satisfy OC3's 8.2 deps)
+    - name: OC3 composer inside container
+      shell: |
+        until docker exec oc3-oc3-1 php -r "echo 1;" 2>/dev/null; do sleep 2; done
+        docker exec oc3-oc3-1 sh -c "
+          apt-get update -qq && apt-get install -y -qq curl unzip 2>/dev/null
+          if [ ! -f /usr/local/bin/composer ]; then
+            curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer 2>/dev/null
+          fi
+          cd /var/www/html
+          composer remove opencaching/okapi --no-update 2>/dev/null || true
+          composer install --no-interaction --optimize-autoloader --ignore-platform-req=ext-gd --ignore-platform-req=ext-mysqli 2>&1 | tail -3
+        "
+      ignore_errors: true
+
+    # ── Database import ─────────────────────────────────
+    - name: Import database from dump
+      when: db_dump_file is defined
+      block:
+        - name: Copy dump file to VM
+          copy:
+            src: "{{ db_dump_file }}"
+            dest: /tmp/oc-dump.sql
+
+        - name: Import dump
+          shell: |
+            docker exec -i mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "DROP DATABASE IF EXISTS oc; CREATE DATABASE oc;" 2>/dev/null
+            docker cp /tmp/oc-dump.sql mariadb-db-1:/tmp/dump.sql
+            docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} oc -e "SOURCE /tmp/dump.sql" 2>&1 | tail -3
+            docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "GRANT ALL ON oc.* TO 'oc'@'%';" 2>/dev/null || true
+
+    # ── NPM routes ──────────────────────────────────────
+    - name: Wait for NPM database
+      shell: |
+        for i in $(seq 1 30); do
+          NPM_VOL=$(docker volume ls -q | grep npm_data)
+          NPM_PATH=$(docker volume inspect $NPM_VOL --format '{{ '{{' }}.Mountpoint{{ '}}' }}')/database.sqlite
+          python3 -c "import sqlite3; sqlite3.connect('$NPM_PATH').execute('SELECT 1 FROM proxy_host')" 2>/dev/null && break
+          sleep 2
+        done
+
+    - name: Insert NPM proxy hosts
+      shell: |
+        NPM_VOL=$(docker volume ls -q | grep npm_data)
+        NPM_PATH=$(docker volume inspect $NPM_VOL --format '{{ '{{' }}.Mountpoint{{ '}}' }}')/database.sqlite
+        python3 -c "
+        import sqlite3, json
+        db = sqlite3.connect('$NPM_PATH')
+        db.execute('DELETE FROM proxy_host')
+        hosts = [
+            ('oc3', 'oc3.{{ domain_suffix }}', 80),
+            ('oc4', 'oc4.{{ domain_suffix }}', 80),
+            ('oc5', 'oc5.{{ domain_suffix }}', 3000),
+            ('okapi', 'okapi.{{ domain_suffix }}', 80),
+        ]
+        for host, domain, port in hosts:
+            db.execute('INSERT INTO proxy_host (created_on,modified_on,owner_user_id,domain_names,forward_host,forward_port,forward_scheme,enabled,meta,advanced_config) VALUES (datetime(\"now\"),datetime(\"now\"),1,?,?,?,\"http\",1,\"{}\",\"\")', (json.dumps([domain]), host, port))
+        db.commit()
+        "
+
+    - name: Regenerate NPM config
+      shell: echo y | docker exec -i npm-nginx-proxy-manager-1 node scripts/regenerate-config 2>/dev/null
+
+    # ── Restart apps to pick up DB + composer changes ───
+    - name: Restart app containers
+      shell: docker restart oc3-oc3-1 oc4-oc4-1 okapi-okapi-1 2>/dev/null || true
+
+    - name: Wait for app containers to be ready
+      shell: sleep 15
+
+    # ── Verification ────────────────────────────────────
+    - name: Test all services
+      shell: |
+        for host in oc3 oc4 oc5 okapi; do
+          code=$(curl -sk -o /dev/null -w "%{http_code}" -H "Host: $host.{{ domain_suffix }}" http://localhost/)
+          echo "$host: HTTP $code"
+        done
+      register: test_result
+
+    - name: Show results
+      debug:
+        var: test_result.stdout_lines

@@ -1,0 +1,90 @@
+name: opencaching
+
+services:
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  oc3:
+    image: php:8.2-apache
+    restart: unless-stopped
+    volumes:
+      - ${OC3_PATH}:/var/www/html
+      - ./start-oc3.sh:/start.sh:ro
+    command: bash /start.sh
+    environment:
+      OC_DB_HOST: db
+      OC_DB_NAME: ${MARIADB_DATABASE}
+      OC_DB_USER: ${MARIADB_USER}
+      OC_DB_PASS: ${MARIADB_PASSWORD}
+    expose: ["80"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  oc4:
+    image: php:8.4-apache
+    restart: unless-stopped
+    volumes:
+      - ${OC4_PATH}:/var/www/html
+      - ./start-oc4.sh:/start.sh:ro
+    command: bash /start.sh
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: 1
+      DATABASE_URL: mysql://${MARIADB_USER}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE}?serverVersion=mariadb-10.11.16
+    expose: ["80"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  oc5:
+    image: node:22-alpine
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ${OC5_PATH}:/app
+    command: sh -c "npm install --silent && exec node app.js"
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_USER: ${MARIADB_USER}
+      DB_PASSWORD: ${MARIADB_PASSWORD}
+      DB_NAME: ${MARIADB_DATABASE}
+      NODE_ENV: development
+    expose: ["3000"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  okapi:
+    image: php:8.2-apache
+    restart: unless-stopped
+    volumes:
+      - ${OKAPI_PATH}:/var/www/html
+      - ./start-okapi.sh:/start.sh:ro
+    command: bash /start.sh
+    environment:
+      OKAPI_DB_HOST: db
+      OKAPI_DB_NAME: ${MARIADB_DATABASE}
+      OKAPI_DB_USER: ${MARIADB_USER}
+      OKAPI_DB_PASS: ${MARIADB_PASSWORD}
+    expose: ["80"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
