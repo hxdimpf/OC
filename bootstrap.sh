@@ -39,7 +39,7 @@ GITHUB_ORG="${2:-hxdimpf}"
 BRANCH="${3:-dev-hx}"
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(dirname "$ROOT_DIR")"
+REPO_DIR="/opt/repos"
 
 OC3_DOMAIN="oc3.$DOMAIN_SUFFIX"
 OC4_DOMAIN="oc4.$DOMAIN_SUFFIX"
@@ -344,7 +344,7 @@ sudo mkdir -p "$REPO_OKAPI/var/okapi" && sudo chmod -R 777 "$REPO_OKAPI/var"
 
 echo "[start] bringing up stacks..."
 
-for stack in npm mariadb oc3 oc4 oc5 okapi dockge; do
+for stack in dockge npm mariadb oc3 oc4 oc5 okapi; do
     echo "  starting $stack..."
     (cd "$STACKS/$stack" && sudo docker compose up -d --quiet-pull 2>&1) || true
 done
@@ -359,16 +359,23 @@ echo "  MariaDB healthy"
 
 # ── 8. Configure NPM proxy routes via SQLite (no API auth needed) ──
 
-echo "[npm] configuring proxy hosts via database..."
-for i in $(seq 1 30); do
+echo "[npm] waiting for NPM database to be ready..."
+NPM_PATH=""
+for i in $(seq 1 60); do
     NPM_DB=$(sudo docker volume ls --format '{{.Name}}' 2>/dev/null | grep npm_data)
-    [ -n "$NPM_DB" ] && break
+    if [ -n "$NPM_DB" ]; then
+        NPM_PATH=$(sudo docker volume inspect "$NPM_DB" --format '{{.Mountpoint}}')/database.sqlite
+        # Wait for the proxy_host table to exist (NPM creates it on first boot)
+        sudo apt-get install -y -qq sqlite3 2>/dev/null || true
+        if sudo sqlite3 "$NPM_PATH" "SELECT 1 FROM proxy_host LIMIT 1;" 2>/dev/null; then
+            break
+        fi
+    fi
     sleep 2
 done
 
-if [ -n "$NPM_DB" ]; then
-    NPM_PATH=$(sudo docker volume inspect "$NPM_DB" --format '{{.Mountpoint}}')/database.sqlite
-    apt-get install -y -qq sqlite3 2>/dev/null || true
+if [ -n "$NPM_PATH" ] && [ -f "$NPM_PATH" ]; then
+    echo "  NPM database ready, inserting proxy hosts..."
     for host in oc3 oc4 oc5 okapi; do
         eval "domain=\$$(echo $host | tr '[:lower:]' '[:upper:]')_DOMAIN"
         port=80
@@ -377,7 +384,7 @@ if [ -n "$NPM_DB" ]; then
         echo "  $domain → $host:$port"
     done
 else
-    echo "  ⚠ NPM database not found — configure proxy hosts manually at http://$OC3_DOMAIN:81"
+    echo "  ⚠ NPM database not ready — configure proxy hosts manually at http://$OC3_DOMAIN:81"
     echo "    $OC3_DOMAIN → oc3:80"
     echo "    $OC4_DOMAIN → oc4:80"
     echo "    $OC5_DOMAIN → oc5:3000"
