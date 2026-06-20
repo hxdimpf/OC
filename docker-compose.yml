@@ -9,10 +9,8 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -44,7 +42,6 @@ services:
     volumes:
       - ${OC3_PATH:-../oc3}:/var/www/html:delegated
     environment:
-      APACHE_DOCUMENT_ROOT: /var/www/html/htdocs
       OC_DB_HOST: db
       OC_DB_NAME: ${MARIADB_DATABASE}
       OC_DB_USER: ${MARIADB_USER}
@@ -66,7 +63,6 @@ services:
     volumes:
       - ${OC4_PATH:-../oc4}:/var/www/html:delegated
     environment:
-      APACHE_DOCUMENT_ROOT: /var/www/html/public
       APP_ENV: dev
       APP_DEBUG: 1
       DATABASE_URL: mysql://${MARIADB_USER}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE}?serverVersion=mariadb-10.11.16
@@ -75,6 +71,30 @@ services:
       - "traefik.http.routers.oc4.rule=Host(`${OC4_DOMAIN}`)"
       - "traefik.http.routers.oc4.entrypoints=web"
       - "traefik.http.services.oc4.loadbalancer.server.port=80"
+    networks:
+      - oc
+    depends_on:
+      db:
+        condition: service_healthy
+
+  oc5:
+    build:
+      context: ./oc5
+    volumes:
+      - ${OC5_PATH:-../oc5}:/app:delegated
+      - /app/node_modules
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_USER: ${MARIADB_USER}
+      DB_PASSWORD: ${MARIADB_PASSWORD}
+      DB_NAME: ${MARIADB_DATABASE}
+      NODE_ENV: development
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.oc5.rule=Host(`${OC5_DOMAIN}`)"
+      - "traefik.http.routers.oc5.entrypoints=web"
+      - "traefik.http.services.oc5.loadbalancer.server.port=3000"
     networks:
       - oc
     depends_on:
