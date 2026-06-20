@@ -519,7 +519,7 @@
 
     # ── Restart apps to pick up DB + composer changes ───
     - name: Restart app containers
-      shell: docker restart oc3-oc3-1 oc4-oc4-1 okapi-okapi-1 2>/dev/null || true
+      shell: docker restart oc3-oc3-1 oc4-oc4-1 okapi-okapi-1 oc6-oc6-1 2>/dev/null || true
 
     - name: Wait for app containers to be ready
       shell: sleep 15
@@ -527,7 +527,7 @@
     # ── Verification ────────────────────────────────────
     - name: Test all services
       shell: |
-        for host in oc3 oc4 oc5 okapi; do
+        for host in oc3 oc4 oc5 okapi oc6; do
           code=$(curl -sk -o /dev/null -w "%{http_code}" -H "Host: $host.{{ domain_suffix }}" http://localhost/)
           echo "$host: HTTP $code"
         done
