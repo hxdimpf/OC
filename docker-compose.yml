@@ -101,6 +101,27 @@ services:
       db:
         condition: service_healthy
 
+  okapi:
+    build:
+      context: ./okapi
+    volumes:
+      - ${OKAPI_PATH:-../okapi}:/var/www/html:delegated
+    environment:
+      OKAPI_DB_HOST: db
+      OKAPI_DB_NAME: ${MARIADB_DATABASE}
+      OKAPI_DB_USER: ${MARIADB_USER}
+      OKAPI_DB_PASS: ${MARIADB_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.okapi.rule=Host(`${OKAPI_DOMAIN}`)"
+      - "traefik.http.routers.okapi.entrypoints=web"
+      - "traefik.http.services.okapi.loadbalancer.server.port=80"
+    networks:
+      - oc
+    depends_on:
+      db:
+        condition: service_healthy
+
 networks:
   oc:
 
