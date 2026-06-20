@@ -354,39 +354,27 @@ until sudo docker inspect mariadb-db-1 --format '{{.State.Health.Status}}' 2>/de
 done
 echo "  MariaDB healthy"
 
-# ── 8. Wait for NPM, configure routes ─────────────────────────────
+# ── 8. Configure NPM proxy routes via SQLite (no API auth needed) ──
 
-echo "[npm] waiting for NPM API..."
-until curl -s http://localhost:81/api/ | grep -q '"status":"OK"'; do
+echo "[npm] configuring proxy hosts via database..."
+for i in $(seq 1 30); do
+    NPM_DB=$(sudo docker volume ls --format '{{.Name}}' 2>/dev/null | grep npm_data)
+    [ -n "$NPM_DB" ] && break
     sleep 2
 done
 
-# Get NPM token (works with default creds; if already set up, waits longer)
-TOKEN=""
-for i in $(seq 1 10); do
-    TOKEN=$(curl -s http://localhost:81/api/tokens \
-        -H "Content-Type: application/json" \
-        -d '{"identity":"admin@example.com","secret":"changeme"}' 2>/dev/null | \
-        python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || true)
-    [ -n "$TOKEN" ] && break
-    sleep 2
-done
-
-if [ -n "$TOKEN" ]; then
-    echo "  NPM API ready, configuring proxy hosts..."
+if [ -n "$NPM_DB" ]; then
+    NPM_PATH=$(sudo docker volume inspect "$NPM_DB" --format '{{.Mountpoint}}')/database.sqlite
+    apt-get install -y -qq sqlite3 2>/dev/null || true
     for host in oc3 oc4 oc5 okapi; do
         eval "domain=\$$(echo $host | tr '[:lower:]' '[:upper:]')_DOMAIN"
         port=80
         [ "$host" = "oc5" ] && port=3000
-        curl -s -X POST http://localhost:81/api/nginx/proxy-hosts \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"domain_names\":[\"$domain\"],\"forward_scheme\":\"http\",\"forward_host\":\"$host\",\"forward_port\":$port}" \
-            > /dev/null 2>&1 || true
+        sudo sqlite3 "$NPM_PATH" "INSERT INTO proxy_host (created_on, modified_on, owner_user_id, domain_names, forward_host, forward_port, forward_scheme, enabled) VALUES (datetime('now'), datetime('now'), 1, '[\"$domain\"]', '$host', $port, 'http', 1);" 2>/dev/null || true
         echo "  $domain → $host:$port"
     done
 else
-    echo "  ⚠ NPM API not reachable — configure proxy hosts manually at http://$OC3_DOMAIN:81"
+    echo "  ⚠ NPM database not found — configure proxy hosts manually at http://$OC3_DOMAIN:81"
     echo "    $OC3_DOMAIN → oc3:80"
     echo "    $OC4_DOMAIN → oc4:80"
     echo "    $OC5_DOMAIN → oc5:3000"
