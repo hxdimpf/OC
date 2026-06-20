@@ -67,14 +67,14 @@
         dest: "{{ repo_base }}/{{ item | lower }}"
         version: "{{ branch }}"
         force: true
-      loop: [OC3, OC4, oc5, okapi]
+      loop: [OC3, OC4, oc5, okapi, OC6]
       register: git_clone
       retries: 3
       delay: 5
 
     - name: Set per-repo git identity
       shell: |
-        for r in OC3 OC4 oc5 okapi; do
+        for r in OC3 OC4 oc5 okapi OC6; do
           lower=$(echo "$r" | tr '[:upper:]' '[:lower:]')
           git -C {{ repo_base }}/$lower config user.name "{{ git_user_name }}"
           git -C {{ repo_base }}/$lower config user.email "{{ git_user_email }}"
@@ -89,7 +89,7 @@
       file:
         path: "{{ stacks_base }}/{{ item }}"
         state: directory
-      loop: [dockge, npm, mariadb, oc3, oc4, oc5, okapi]
+      loop: [dockge, npm, mariadb, oc3, oc4, oc5, okapi, oc6]
 
     # ── Write compose files ─────────────────────────────
     - name: Dockge compose
@@ -419,10 +419,39 @@
       args:
         chdir: "{{ stacks_base }}/oc5"
 
+    - name: OC6 compose
+      copy:
+        dest: "{{ stacks_base }}/oc6/docker-compose.yml"
+        content: |
+          name: oc6
+          services:
+            oc6:
+              build:
+                context: {{ repo_base }}/oc6
+              restart: unless-stopped
+              volumes:
+                - {{ repo_base }}/oc6:/app
+                - /app/node_modules
+              environment:
+                PORT: "3000"
+                DATABASE_URL: mysql://oc:{{ dbpass }}@db:3306/oc
+                OKAPI_URL: http://okapi:80
+                NODE_ENV: development
+              expose: ["3000"]
+              networks: [oc]
+          networks:
+            oc:
+              external: true
+
     - name: Start OKAPI
       command: docker compose up -d --quiet-pull
       args:
         chdir: "{{ stacks_base }}/okapi"
+
+    - name: Start OC6
+      command: docker compose up -d --build
+      args:
+        chdir: "{{ stacks_base }}/oc6"
 
     # OC3 composer must run inside its container (host PHP 8.4 can't satisfy OC3's 8.2 deps)
     - name: OC3 composer inside container
@@ -478,6 +507,7 @@
             ('oc4', 'oc4.{{ domain_suffix }}', 80),
             ('oc5', 'oc5.{{ domain_suffix }}', 3000),
             ('okapi', 'okapi.{{ domain_suffix }}', 80),
+            ('oc6', 'oc6.{{ domain_suffix }}', 3000),
         ]
         for host, domain, port in hosts:
             db.execute('INSERT INTO proxy_host (created_on,modified_on,owner_user_id,domain_names,forward_host,forward_port,forward_scheme,enabled,meta,advanced_config) VALUES (datetime(\"now\"),datetime(\"now\"),1,?,?,?,\"http\",1,\"{}\",\"\")', (json.dumps([domain]), host, port))
