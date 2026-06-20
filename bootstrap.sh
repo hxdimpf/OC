@@ -357,7 +357,50 @@ until sudo docker inspect mariadb-db-1 --format '{{.State.Health.Status}}' 2>/de
 done
 echo "  MariaDB healthy"
 
-# ── 8. Configure NPM proxy routes via SQLite (no API auth needed) ──
+# ── 7a. Database bootstrap (schema, static data, stored procs) ──────
+
+DBPASS_FILE="$STACKS/mariadb/.dbpass"
+echo "[db] importing base schema and static data..."
+
+# dump_v158.sql is the base schema (committed in the OC3 repo)
+sudo docker exec -i mariadb-db-1 mysql -uroot -p$(cat "$DBPASS_FILE") oc \
+    < "$REPO_OC3/sql/dump_v158.sql" 2>&1 | grep -v "Warning" | tail -1 || true
+
+# Import all static data files
+for f in "$REPO_OC3/sql/static-data/"*.sql; do
+    sudo docker exec -i mariadb-db-1 mysql -uroot -p$(cat "$DBPASS_FILE") --force oc < "$f" 2>/dev/null
+done
+echo "  Schema + static data imported"
+
+# Run maintain.php to install stored procedures and triggers
+echo "  Installing stored procedures (waiting for OC3 to be ready)..."
+# Wait for OC3 Apache to be up
+for i in $(seq 1 30); do
+    if sudo docker exec oc3-oc3-1 curl -sI http://localhost/ 2>/dev/null | grep -q "200\|302\|401"; then
+        break
+    fi
+    sleep 2
+done
+sudo docker exec oc3-oc3-1 php /var/www/html/sql/stored-proc/maintain.php 2>&1 | tail -3 || true
+echo "  Stored procedures installed"
+
+# Import sample user (user_id 107469 becomes admin)
+if [ -f "$REPO_OC3/sql/user_content_sample.sql" ]; then
+    sudo docker exec -i mariadb-db-1 mysql -uroot -p$(cat "$DBPASS_FILE") --force oc \
+        < "$REPO_OC3/sql/user_content_sample.sql" 2>/dev/null
+    echo "  Sample user imported"
+fi
+
+# Grant privileges to app user
+sudo docker exec mariadb-db-1 mysql -uroot -p$(cat "$DBPASS_FILE") \
+    -e "GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,INDEX,ALTER,CREATE ROUTINE,ALTER ROUTINE,TRIGGER,LOCK TABLES ON oc.* TO 'oc'@'%';" 2>/dev/null || true
+
+echo "[db] database ready"
+
+# ── 7b. Wait for app containers to be ready ────────────────────────
+
+echo "[wait] waiting for app containers..."
+sleep 5
 
 echo "[npm] waiting for NPM database to be ready..."
 NPM_PATH=""
