@@ -25,11 +25,18 @@ set -euo pipefail
 
 DOMAIN_SUFFIX="${1:-}"
 if [ -z "$DOMAIN_SUFFIX" ]; then
-    echo "Usage: $0 <domain-suffix>"
-    echo "  e.g. $0 baiti.net"
+    echo "Usage: $0 <domain-suffix> [github-org] [branch]"
+    echo "  e.g. $0 baiti.net hxdimpf dev-hx"
     echo "  gives: oc3.baiti.net, oc4.baiti.net, oc5.baiti.net, okapi.baiti.net"
+    echo ""
+    echo "Defaults:"
+    echo "  github-org: hxdimpf"
+    echo "  branch:     dev-hx"
     exit 1
 fi
+
+GITHUB_ORG="${2:-hxdimpf}"
+BRANCH="${3:-dev-hx}"
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$ROOT_DIR")"
@@ -41,7 +48,8 @@ OKAPI_DOMAIN="okapi.$DOMAIN_SUFFIX"
 
 echo "============================================"
 echo " OC Bootstrap"
-echo " Domain suffix: $DOMAIN_SUFFIX"
+echo " Domain: $DOMAIN_SUFFIX"
+echo " GitHub: $GITHUB_ORG  Branch: $BRANCH"
 echo " $OC3_DOMAIN / $OC4_DOMAIN / $OC5_DOMAIN / $OKAPI_DOMAIN"
 echo "============================================"
 
@@ -54,14 +62,15 @@ for repo in OC3 OC4 oc5 okapi; do
     lower=$(echo "$repo" | tr '[:upper:]' '[:lower:]')
 
     if [ -d "$dir/.git" ]; then
-        echo "[$lower] already cloned — pulling dev-hx"
+        echo "[$lower] already cloned — pulling $BRANCH"
         git -C "$dir" fetch origin
-        git -C "$dir" checkout dev-hx 2>/dev/null || true
-        git -C "$dir" pull origin dev-hx --ff-only 2>/dev/null || true
+        git -C "$dir" checkout "$BRANCH" 2>/dev/null || true
+        git -C "$dir" pull origin "$BRANCH" --ff-only 2>/dev/null || true
     else
         echo "[$lower] cloning..."
-        git clone -b dev-hx "git@github.com:hxdimpf/$repo.git" "$dir" 2>/dev/null || \
-            git clone -b dev-hx "https://github.com/hxdimpf/$repo.git" "$dir"
+        # Try HTTPS first (works without SSH key for public repos), fall back to SSH
+        git clone -b "$BRANCH" "https://github.com/${GITHUB_ORG}/$repo.git" "$dir" 2>/dev/null || \
+            git clone -b "$BRANCH" "git@github.com:${GITHUB_ORG}/$repo.git" "$dir"
     fi
 done
 
