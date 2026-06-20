@@ -1,23 +1,6 @@
 name: opencaching
 
 services:
-  traefik:
-    image: traefik:v3.3
-    command:
-      - "--api.insecure=false"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.file.directory=/etc/traefik/dynamic"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./traefik/dynamic:/etc/traefik/dynamic:ro
-    networks:
-      - oc
-
   db:
     image: mariadb:10.11
     environment:
@@ -46,11 +29,8 @@ services:
       OC_DB_NAME: ${MARIADB_DATABASE}
       OC_DB_USER: ${MARIADB_USER}
       OC_DB_PASS: ${MARIADB_PASSWORD}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.oc3.rule=Host(`${OC3_DOMAIN}`)"
-      - "traefik.http.routers.oc3.entrypoints=web"
-      - "traefik.http.services.oc3.loadbalancer.server.port=80"
+    expose:
+      - "80"
     networks:
       - oc
     depends_on:
@@ -66,11 +46,8 @@ services:
       APP_ENV: dev
       APP_DEBUG: 1
       DATABASE_URL: mysql://${MARIADB_USER}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE}?serverVersion=mariadb-10.11.16
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.oc4.rule=Host(`${OC4_DOMAIN}`)"
-      - "traefik.http.routers.oc4.entrypoints=web"
-      - "traefik.http.services.oc4.loadbalancer.server.port=80"
+    expose:
+      - "80"
     networks:
       - oc
     depends_on:
@@ -90,11 +67,8 @@ services:
       DB_PASSWORD: ${MARIADB_PASSWORD}
       DB_NAME: ${MARIADB_DATABASE}
       NODE_ENV: development
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.oc5.rule=Host(`${OC5_DOMAIN}`)"
-      - "traefik.http.routers.oc5.entrypoints=web"
-      - "traefik.http.services.oc5.loadbalancer.server.port=3000"
+    expose:
+      - "3000"
     networks:
       - oc
     depends_on:
@@ -111,11 +85,8 @@ services:
       OKAPI_DB_NAME: ${MARIADB_DATABASE}
       OKAPI_DB_USER: ${MARIADB_USER}
       OKAPI_DB_PASS: ${MARIADB_PASSWORD}
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.okapi.rule=Host(`${OKAPI_DOMAIN}`)"
-      - "traefik.http.routers.okapi.entrypoints=web"
-      - "traefik.http.services.okapi.loadbalancer.server.port=80"
+    expose:
+      - "80"
     networks:
       - oc
     depends_on:

@@ -1,33 +1,70 @@
 # OC — OpenCaching Development Environment
 
-One command starts the entire opencaching stack: legacy PHP app (OC3),
-Symfony frontend (OC4), shared MariaDB, and Traefik reverse proxy.
+Docker Compose stack: OC3 (legacy PHP), OC4 (Symfony), OC5 (Node.js),
+OKAPI (shared API), and MariaDB. Routed through Nginx Proxy Manager.
 
 ## Quick Start
 
-    git clone git@github.com:hxdimpf/OC.git
-    git clone git@github.com:hxdimpf/OC3.git ../oc3
-    git clone git@github.com:hxdimpf/OC4.git ../oc4
-    cd OC
-    cp .env.dist .env
-    docker compose up -d
+```bash
+# Clone everything
+git clone git@github.com:hxdimpf/OC.git
+git clone git@github.com:hxdimpf/OC3.git ../oc3
+git clone git@github.com:hxdimpf/OC4.git ../oc4
+git clone git@github.com:hxdimpf/OC5.git ../oc5
+git clone -b oc4-combined git@github.com:hxdimpf/okapi.git ../okapi
+cd OC
 
-- **OC3** (legacy): http://oc3.localhost
-- **OC4** (Symfony): http://oc4.localhost
+# Start infrastructure (NPM + Dockge)
+cp .env.dist .env
+# Edit .env with real passwords
+docker compose -f docker-compose.infra.yml up -d
+
+# Start apps
+docker compose up -d
+```
 
 ## Architecture
 
-    traefik :80
-       ├── oc3.localhost  →  OC3 (php:8.2, /htdocs)
-       └── oc4.localhost  →  OC4 (php:8.4, /public)
-               │
-               └── db (mariadb:10.11)
+```
+nginx-proxy-manager :80 :443 :81 (admin)
+    ├── oc3.baiti.net   →  oc3:80
+    ├── oc4.baiti.net   →  oc4:80
+    ├── oc5.baiti.net   →  oc5:3000
+    └── okapi.baiti.net →  okapi:80
 
-Source repos are mounted as volumes — edit locally, reload in browser.
+dockge :5001 (stacks dashboard)
+```
 
-## Database
+## Services
 
-The shared MariaDB initializes from `db/init/`. Drop your schema dump
-(`dump_v158.sql.gz`) there before first start, or import manually:
+| Service | Stack | Exposed Port |
+|---------|-------|-------------|
+| OC3 | PHP 8.2, Smarty | 80 (internal) |
+| OC4 | PHP 8.4, Symfony 7.x | 80 (internal) |
+| OC5 | Node 22, Express | 3000 (internal) |
+| OKAPI | PHP 8.2 | 80 (internal) |
+| MariaDB | 10.11 | none |
+| NPM | nginx proxy | 80, 443, 81 |
+| Dockge | compose GUI | 5001 |
 
-    docker compose exec -T db mysql -uoc -poc oc < dump.sql
+## Routing
+
+Routes are configured in the Nginx Proxy Manager GUI at http://<host>:81.
+Point each domain to its service:
+
+- `oc3.baiti.net` → `http://oc3:80`
+- `oc4.baiti.net` → `http://oc4:80`
+- `oc5.baiti.net` → `http://oc5:3000`
+- `okapi.baiti.net` → `http://okapi:80`
+
+## Daily workflow
+
+```bash
+cd /var/www/oc/OC
+docker compose pull       # latest images
+git pull && cd ../oc3 && git pull && cd ../oc4 && git pull && cd ../oc5 && git pull && cd ../okapi && git pull && cd ../OC
+docker compose up -d --build
+```
+
+Source repos are mounted as volumes — no rebuild needed for code changes,
+only `docker compose restart <service>`.
