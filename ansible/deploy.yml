@@ -59,6 +59,14 @@
       retries: 3
       delay: 5
 
+    - name: Set per-repo git identity
+      shell: |
+        for r in OC3 OC4 oc5 okapi; do
+          lower=$(echo "$r" | tr '[:upper:]' '[:lower:]')
+          git -C {{ repo_base }}/$lower config user.name "{{ git_user_name | default('Developer') }}"
+          git -C {{ repo_base }}/$lower config user.email "{{ git_user_email | default('dev@localhost') }}"
+        done
+
     # ── DB password ─────────────────────────────────────
     - name: Generate DB password
       set_fact:
