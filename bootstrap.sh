@@ -366,8 +366,7 @@ for i in $(seq 1 60); do
     if [ -n "$NPM_DB" ]; then
         NPM_PATH=$(sudo docker volume inspect "$NPM_DB" --format '{{.Mountpoint}}')/database.sqlite
         # Wait for the proxy_host table to exist (NPM creates it on first boot)
-        sudo apt-get install -y -qq sqlite3 2>/dev/null || true
-        if sudo sqlite3 "$NPM_PATH" "SELECT 1 FROM proxy_host LIMIT 1;" 2>/dev/null; then
+        if sudo python3 -c "import sqlite3; sqlite3.connect('$NPM_PATH').execute('SELECT 1 FROM proxy_host')" 2>/dev/null; then
             break
         fi
     fi
@@ -376,13 +375,23 @@ done
 
 if [ -n "$NPM_PATH" ] && [ -f "$NPM_PATH" ]; then
     echo "  NPM database ready, inserting proxy hosts..."
-    for host in oc3 oc4 oc5 okapi; do
-        eval "domain=\$$(echo $host | tr '[:lower:]' '[:upper:]')_DOMAIN"
-        port=80
-        [ "$host" = "oc5" ] && port=3000
-        sudo sqlite3 "$NPM_PATH" "INSERT INTO proxy_host (created_on, modified_on, owner_user_id, domain_names, forward_host, forward_port, forward_scheme, enabled) VALUES (datetime('now'), datetime('now'), 1, '[\"$domain\"]', '$host', $port, 'http', 1);" 2>/dev/null || true
-        echo "  $domain → $host:$port"
-    done
+    python3 -c "
+import sqlite3, json
+db = sqlite3.connect('$NPM_PATH')
+hosts = [
+    ('oc3', '${OC3_DOMAIN}', 80),
+    ('oc4', '${OC4_DOMAIN}', 80),
+    ('oc5', '${OC5_DOMAIN}', 3000),
+    ('okapi', '${OKAPI_DOMAIN}', 80),
+]
+for host, domain, port in hosts:
+    db.execute(
+        'INSERT INTO proxy_host (created_on, modified_on, owner_user_id, domain_names, forward_host, forward_port, forward_scheme, enabled, meta, advanced_config) VALUES (datetime(\"now\"), datetime(\"now\"), 1, ?, ?, ?, \"http\", 1, \"{}\", \"\")',
+        (json.dumps([domain]), host, port)
+    )
+db.commit()
+print(f'  Inserted {len(hosts)} proxy hosts')
+" || true
 else
     echo "  ⚠ NPM database not ready — configure proxy hosts manually at http://$OC3_DOMAIN:81"
     echo "    $OC3_DOMAIN → oc3:80"
