@@ -90,7 +90,10 @@ if ! docker compose version &>/dev/null 2>&1; then
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
         https://download.docker.com/linux/debian trixie stable" | \
         sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update -qq && sudo apt-get install -y -qq docker-compose-plugin
+    sudo apt-get update -qq
+    # Remove conflicting Debian package first, then install Docker's
+    sudo dpkg --force-all -r docker-buildx 2>/dev/null || true
+    sudo apt-get install -y -qq docker-compose-plugin docker-buildx-plugin
 fi
 
 # ── 3. Network ─────────────────────────────────────────────────────
