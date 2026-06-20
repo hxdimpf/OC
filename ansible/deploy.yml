@@ -2,10 +2,23 @@
 - name: OC Dev Stack Deployment
   hosts: oc_test
   become: true
+  vars_prompt:
+    - name: domain_suffix
+      prompt: "Domain suffix (e.g. baiti.net)"
+      private: false
+      default: "baiti.net"
+
+    - name: git_user_name
+      prompt: "Git user name for per-repo identity"
+      private: false
+
+    - name: git_user_email
+      prompt: "Git user email for per-repo identity"
+      private: false
+
   vars:
-    domain_suffix: baiti.net
-    github_org: hxdimpf
-    branch: dev-hx
+    github_org: "{{ lookup('env', 'OC_GITHUB_ORG') | default('hxdimpf', true) }}"
+    branch: "{{ lookup('env', 'OC_BRANCH') | default('dev-hx', true) }}"
     repo_base: /opt/repos
     stacks_base: /opt/stacks
 
@@ -63,8 +76,8 @@
       shell: |
         for r in OC3 OC4 oc5 okapi; do
           lower=$(echo "$r" | tr '[:upper:]' '[:lower:]')
-          git -C {{ repo_base }}/$lower config user.name "{{ git_user_name | default('Developer') }}"
-          git -C {{ repo_base }}/$lower config user.email "{{ git_user_email | default('dev@localhost') }}"
+          git -C {{ repo_base }}/$lower config user.name "{{ git_user_name }}"
+          git -C {{ repo_base }}/$lower config user.email "{{ git_user_email }}"
         done
 
     # ── DB password ─────────────────────────────────────
