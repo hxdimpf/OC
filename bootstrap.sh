@@ -392,6 +392,9 @@ for host, domain, port in hosts:
 db.commit()
 print(f'  Inserted {len(hosts)} proxy hosts')
 " || true
+    # Force NPM to regenerate nginx configs from the database
+    echo y | sudo docker exec -i npm-nginx-proxy-manager-1 node scripts/regenerate-config 2>/dev/null || true
+    echo "  NPM config regenerated"
 else
     echo "  ⚠ NPM database not ready — configure proxy hosts manually at http://$OC3_DOMAIN:81"
     echo "    $OC3_DOMAIN → oc3:80"
