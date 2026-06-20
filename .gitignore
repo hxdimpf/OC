@@ -1,4 +1,2 @@
 .env
 db_data/
-*.md
-!/README.md
