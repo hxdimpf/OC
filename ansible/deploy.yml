@@ -371,11 +371,18 @@
         mode: "0777"
 
     # ── Composer install ────────────────────────────────
-    - name: Install OC4 composer deps
+    - name: OC4 composer deps
       shell: |
         cd {{ repo_base }}/oc4
         composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
       ignore_errors: true
+
+    - name: OC4 _frontend symlinks (maps /_frontend/css to submodule public/ dir)
+      shell: |
+        cd {{ repo_base }}/oc4/public/_frontend
+        for dir in css js vendor; do
+          ln -sfn public/$dir $dir
+        done
 
     - name: Install OKAPI composer deps
       shell: |
@@ -455,8 +462,10 @@
           shell: |
             docker exec -i mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "DROP DATABASE IF EXISTS oc; CREATE DATABASE oc;" 2>/dev/null
             docker cp /tmp/oc-dump.sql mariadb-db-1:/tmp/dump.sql
-            docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} oc -e "SOURCE /tmp/dump.sql" 2>&1 | tail -3
-            docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "GRANT ALL ON oc.* TO 'oc'@'%';" 2>/dev/null || true
+            docker exec mariadb-db-1 sh -c "zcat /tmp/dump.sql 2>/dev/null | mysql -uroot -p{{ dbpass }} --binary-mode oc" 2>&1 | tail -3 || echo "Import may have warnings"
+            docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "SET PASSWORD FOR 'oc'@'%' = PASSWORD('{{ dbpass }}'); FLUSH PRIVILEGES;" 2>/dev/null || docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "ALTER USER 'oc'@'%' IDENTIFIED BY '{{ dbpass }}'; FLUSH PRIVILEGES;" 2>/dev/null
+          environment:
+            MODULE_STRICT_UTF8_RESPONSE: "false"
 
     # ── NPM routes ──────────────────────────────────────
     - name: Wait for NPM database
