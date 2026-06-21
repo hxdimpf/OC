@@ -16,7 +16,12 @@ The ONLY safe way to create an OC5 template from an OC4 template:
 ```
 
 This script handles: `extends`, `parent()`→`super()`, `|trans`→i18n lookup, `|json_encode|raw`→`|safe`.
-It does NOT handle `path()` routes — those must be inspected manually (only used in forms).
+It does NOT handle `path()` routes, `app.request.locale`, `knp_menu_render`, `"now"|date` — those must be inspected manually.
+
+**Exception: `base.njk` is hand-maintained.** The OC4 Twig `base.html.twig` uses many Symfony-specific
+constructs (`app.request.locale`, `path()`, `knp_menu_render()`, `|date("Y")`) that the converter
+cannot handle. The OC5 `base.njk` is maintained manually. When the OC4 base template changes,
+apply the same change manually to OC5's `base.njk` — do NOT run the converter on it.
 
 **Never write a template from scratch.** Always start from the OC4 Twig original.
 
