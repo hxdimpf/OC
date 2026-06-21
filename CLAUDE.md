@@ -2,9 +2,13 @@
 
 ## Critical Rules (read first, never skip)
 
-### 1. Templates: NEVER invent, ALWAYS convert mechanically
+### 1. Templates: OC4 Twigs are canonical, OC5 Nunjucks are derived
 
 OC4 and OC5 share the `oc-frontend` git submodule. Templates must produce IDENTICAL DOM.
+
+**All template changes MUST be made in OC4's Twig files first.**
+OC5 Nunjucks files are derived artifacts — never edit them directly.
+
 The ONLY safe way to create an OC5 template from an OC4 template:
 
 ```bash
