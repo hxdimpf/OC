@@ -377,11 +377,12 @@
         composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
       ignore_errors: true
 
-    - name: OC4 _frontend symlinks (maps /_frontend/css to submodule public/ dir)
+    - name: OC4 _frontend symlinks (maps /_frontend/* and /* to submodule public/ dir)
       shell: |
-        cd {{ repo_base }}/oc4/public/_frontend
+        cd {{ repo_base }}/oc4/public
         for dir in css js vendor; do
-          ln -sfn public/$dir $dir
+          ln -sfn _frontend/public/$dir $dir        # /vendor/* → submodule
+          cd _frontend && ln -sfn public/$dir $dir && cd ..  # /_frontend/vendor/* → submodule
         done
 
     - name: Install OKAPI composer deps
