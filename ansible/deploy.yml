@@ -107,13 +107,10 @@
         dest: "{{ repo_base }}/{{ item | lower }}"
         version: "{{ branch }}"
         force: true
-      loop: [OC3, OC4, oc5, okapi]
+      loop: [OC3, OC4, oc5, okapi, oc-frontend]
       register: git_clone
       retries: 3
       delay: 5
-
-    - name: Init oc5 git submodule (oc-frontend)
-      shell: git -C {{ repo_base }}/oc5 submodule update --init --recursive
 
     - name: Set per-repo git identity
       shell: |
@@ -239,6 +236,7 @@
               restart: unless-stopped
               volumes:
                 - {{ repo_base }}/oc4:/var/www/html
+                - {{ repo_base }}/oc-frontend:/var/www/html/public/_frontend
               environment:
                 APACHE_DOCUMENT_ROOT: /var/www/html/public
                 APP_ENV: dev
@@ -262,6 +260,7 @@
               working_dir: /app
               volumes:
                 - {{ repo_base }}/oc5:/app
+                - {{ repo_base }}/oc-frontend:/app/public/_frontend
               command: sh -c "npm install --silent && exec node app.js"
               environment:
                 PORT: "3000"
@@ -417,14 +416,6 @@
         cd {{ repo_base }}/oc4
         composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
       ignore_errors: true
-
-    - name: OC4 _frontend symlinks (maps /_frontend/* and /* to submodule public/ dir)
-      shell: |
-        cd {{ repo_base }}/oc4/public
-        for dir in css js vendor; do
-          ln -sfn _frontend/public/$dir $dir        # /vendor/* → submodule
-          cd _frontend && ln -sfn public/$dir $dir && cd ..  # /_frontend/vendor/* → submodule
-        done
 
     - name: Install OKAPI composer deps
       shell: |
