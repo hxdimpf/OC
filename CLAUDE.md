@@ -14,7 +14,7 @@ All editing, committing, and pushing happens from your Mac.
 | `hxdimpf/OC4` | `~/src/oc4` | Symfony 7.x frontend |
 | `hxdimpf/oc5` | `~/src/oc5` | Node.js/Express frontend |
 | `hxdimpf/okapi` | `~/src/okapi` | OKAPI REST API |
-| `hxdimpf/oc-frontend` | `~/src/oc5/public/_frontend/` | Shared JS/CSS/vendor (git submodule) |
+| `hxdimpf/oc-frontend` | `~/src/oc-frontend` | Shared JS/CSS/vendor (standalone repo) |
 
 ### Workflow
 
@@ -25,14 +25,17 @@ All editing, committing, and pushing happens from your Mac.
 3. ssh oc3 "sudo git -C /opt/repos/oc5 pull && sudo docker restart oc5-oc5-1"
 ```
 
-**For shared frontend JS/CSS (`oc-frontend` submodule):**
+**For shared frontend JS/CSS (`oc-frontend` standalone repo):**
 ```
-1. cd ~/src/oc5/public/_frontend   # edit submodule locally
+1. cd ~/src/oc-frontend            # edit locally (clone from hxdimpf/oc-frontend)
 2. git add -A && git commit -m "..." && git push origin dev-hx
-3. cd ~/src/oc5 && git submodule update --remote public/_frontend && git commit -am "fix: update submodule" && git push origin dev-hx
-4. cd ~/src/oc4 && git pull origin dev-hx && git submodule update --remote public/_frontend && git commit -am "fix: update submodule" && git push origin dev-hx
-5. ssh oc3 "sudo git -C /opt/repos/oc5 pull && sudo git -C /opt/repos/oc5 submodule update --init && sudo git -C /opt/repos/oc4 pull && sudo git -C /opt/repos/oc4 submodule update --init && sudo docker restart oc4-oc4-1 oc5-oc5-1"
+3. ssh oc3 "sudo git -C /opt/repos/oc-frontend pull && sudo docker restart oc4-oc4-1 oc5-oc5-1"
 ```
+
+oc-frontend is a standalone repo mounted into BOTH containers.
+No submodules. One pull updates both stacks simultaneously.
+OC4 has root symlinks: public/{css,js,vendor} → _frontend/{css,js,vendor}
+OC5 serves _frontend directly at /_frontend/ and / (root).
 
 **For Ansible playbook changes:**
 ```
@@ -48,7 +51,7 @@ All editing, committing, and pushing happens from your Mac.
 
 ### 1. Templates: OC4 Twigs are canonical, OC5 Nunjucks are derived
 
-OC4 and OC5 share the `oc-frontend` git submodule. Templates must produce IDENTICAL DOM.
+OC4 and OC5 share the `oc-frontend` repo (standalone git clone, mounted into both containers). Templates must produce IDENTICAL DOM.
 
 **All template changes MUST be made in OC4's Twig files first.**
 OC5 Nunjucks files are derived artifacts — never edit them directly.
@@ -165,7 +168,7 @@ can be re-enabled by setting domain to `.baiti.net`.
 
 - Express 5, ES modules (`"type": "module"`)
 - Nunjucks templates at `public/templates/nunjucks/`
-- Shared frontend submodule at `public/_frontend/` (from `hxdimpf/oc-frontend`)
+- Shared frontend at `public/_frontend/` (mounted from standalone `hxdimpf/oc-frontend` repo)
 - `app.js` has `format`, `number_format` filters and `range()` global
 - No helmet (dev env)
 - Auth: `oc5_session` cookie → `sys_sessions` validation via `src/auth.js`
