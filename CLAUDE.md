@@ -1,5 +1,49 @@
 # CLAUDE.md — OC Docker Stack
 
+## Where to work: ALWAYS on your Mac in ~/src/
+
+**Never edit files on the server** (`ssh baiti@oc3.baiti.net`). The server is deployment target only.
+All editing, committing, and pushing happens from your Mac.
+
+### Repos and local paths
+
+| Repo | Local path | What it contains |
+|------|-----------|-----------------|
+| `hxdimpf/OC` | `~/src/oc` | Playbook, scripts, docs |
+| `hxdimpf/OC3` | `~/src/oc3` | Legacy PHP app |
+| `hxdimpf/OC4` | `~/src/oc4` | Symfony 7.x frontend |
+| `hxdimpf/oc5` | `~/src/oc5` | Node.js/Express frontend |
+| `hxdimpf/okapi` | `~/src/okapi` | OKAPI REST API |
+| `hxdimpf/oc-frontend` | `~/src/oc5/public/_frontend/` | Shared JS/CSS/vendor (git submodule) |
+
+### Workflow
+
+**For backend code (PHP, Node.js, templates):**
+```
+1. cd ~/src/oc5                    # edit locally
+2. git add -A && git commit -m "..." && git push origin dev-hx
+3. ssh oc3 "sudo git -C /opt/repos/oc5 pull && sudo docker restart oc5-oc5-1"
+```
+
+**For shared frontend JS/CSS (`oc-frontend` submodule):**
+```
+1. cd ~/src/oc5/public/_frontend   # edit submodule locally
+2. git add -A && git commit -m "..." && git push origin dev-hx
+3. cd ~/src/oc5 && git submodule update --remote public/_frontend && git commit -am "fix: update submodule" && git push origin dev-hx
+4. cd ~/src/oc4 && git pull origin dev-hx && git submodule update --remote public/_frontend && git commit -am "fix: update submodule" && git push origin dev-hx
+5. ssh oc3 "sudo git -C /opt/repos/oc5 pull && sudo git -C /opt/repos/oc5 submodule update --init && sudo git -C /opt/repos/oc4 pull && sudo git -C /opt/repos/oc4 submodule update --init && sudo docker restart oc4-oc4-1 oc5-oc5-1"
+```
+
+**For Ansible playbook changes:**
+```
+1. cd ~/src/oc/ansible            # edit playbook or config
+2. git add -A && git commit -m "..." && git push origin dev-hx
+3. ansible-playbook -i inventory.ini deploy.yml -e "db_dump_file=..."
+```
+
+**Never:** edit on the server, commit on the server, push from the server.
+**Always:** edit locally → commit → push → deploy via SSH pull + restart.
+
 ## Critical Rules (read first, never skip)
 
 ### 1. Templates: OC4 Twigs are canonical, OC5 Nunjucks are derived
