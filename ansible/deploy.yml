@@ -61,22 +61,31 @@
       shell: docker network create oc 2>/dev/null || true
 
     # ── SSH key for git push ────────────────────────────
-    - name: Generate SSH key for git push (survives snapshot revert)
+    - name: Deploy persisted SSH key (survives snapshot reverts)
+      copy:
+        src: files/oc_deploy_key
+        dest: /home/{{ ansible_user }}/.ssh/id_ed25519
+        owner: "{{ ansible_user }}"
+        mode: "0600"
+      ignore_errors: true
+
+    - name: Deploy public key
+      copy:
+        src: files/oc_deploy_key.pub
+        dest: /home/{{ ansible_user }}/.ssh/id_ed25519.pub
+        owner: "{{ ansible_user }}"
+        mode: "0644"
+      ignore_errors: true
+
+    - name: Generate new SSH key if none exists
       shell: |
         if [ ! -f /home/{{ ansible_user }}/.ssh/id_ed25519 ]; then
           ssh-keygen -t ed25519 -C "{{ git_user_email }}" -f /home/{{ ansible_user }}/.ssh/id_ed25519 -N ""
+          echo "NEW KEY GENERATED — ADD TO GITHUB:"
+          cat /home/{{ ansible_user }}/.ssh/id_ed25519.pub
         fi
       args:
         creates: /home/{{ ansible_user }}/.ssh/id_ed25519
-
-    - name: Fetch public key
-      slurp:
-        src: /home/{{ ansible_user }}/.ssh/id_ed25519.pub
-      register: ssh_pubkey
-
-    - name: Display public key (add to GitHub if new)
-      debug:
-        msg: "{{ ssh_pubkey.content | b64decode }}"
 
     - name: Configure SSH for GitHub
       copy:
