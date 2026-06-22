@@ -83,6 +83,21 @@
       debug:
         msg: "{{ ssh_key.public_key }}"
 
+    - name: Configure SSH for root (git repos are root-owned)
+      shell: |
+        mkdir -p /root/.ssh
+        cp /home/{{ ansible_user }}/.ssh/id_ed25519 /root/.ssh/
+        cp /home/{{ ansible_user }}/.ssh/id_ed25519.pub /root/.ssh/
+        cat > /root/.ssh/config << EOF
+        Host github.com
+          HostName github.com
+          IdentityFile /root/.ssh/id_ed25519
+          IdentitiesOnly yes
+          User git
+        EOF
+      args:
+        creates: /root/.ssh/config
+
     # ── Clone repos ─────────────────────────────────────
     - name: Clone repository
       git:
