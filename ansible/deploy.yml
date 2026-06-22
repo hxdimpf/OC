@@ -60,6 +60,29 @@
     - name: Create shared Docker network
       shell: docker network create oc 2>/dev/null || true
 
+    # ── SSH key for git push ────────────────────────────
+    - name: Generate SSH key for git push (survives snapshot revert)
+      openssh_keypair:
+        path: "/home/{{ ansible_user }}/.ssh/id_ed25519"
+        type: ed25519
+        comment: "{{ git_user_email }}"
+      register: ssh_key
+
+    - name: Configure SSH for GitHub
+      copy:
+        content: |
+          Host github.com
+            HostName github.com
+            IdentityFile /home/{{ ansible_user }}/.ssh/id_ed25519
+            IdentitiesOnly yes
+            User git
+        dest: "/home/{{ ansible_user }}/.ssh/config"
+        mode: "0644"
+
+    - name: Display public key (add to GitHub if new)
+      debug:
+        msg: "{{ ssh_key.public_key }}"
+
     # ── Clone repos ─────────────────────────────────────
     - name: Clone repository
       git:
@@ -467,6 +490,43 @@
             docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "SET PASSWORD FOR 'oc'@'%' = PASSWORD('{{ dbpass }}'); FLUSH PRIVILEGES;" 2>/dev/null || docker exec mariadb-db-1 mysql -uroot -p{{ dbpass }} -e "ALTER USER 'oc'@'%' IDENTIFIED BY '{{ dbpass }}'; FLUSH PRIVILEGES;" 2>/dev/null
           environment:
             MODULE_STRICT_UTF8_RESPONSE: "false"
+
+        - name: Fix AFTER INSERT trigger (sp_update_logstat incompatible with MariaDB 10.11)
+          shell: |
+            cat > /tmp/fix-after-insert.sql <<'TRIGSQL'
+          DROP TRIGGER IF EXISTS cacheLogsAfterInsert;
+          DELIMITER ;;
+          CREATE TRIGGER cacheLogsAfterInsert AFTER INSERT ON cache_logs
+          FOR EACH ROW
+          BEGIN
+              DECLARE done INT DEFAULT 0;
+              DECLARE notify_user_id INT;
+              DECLARE cur1 CURSOR FOR
+                  SELECT cache_watches.user_id FROM cache_watches
+                  INNER JOIN caches ON cache_watches.cache_id=caches.cache_id
+                  INNER JOIN cache_status ON caches.status=cache_status.id
+                  WHERE cache_watches.cache_id=NEW.cache_id AND cache_status.allow_user_view=1
+                  UNION
+                  SELECT clw.user_id FROM cache_list_watches clw
+                  INNER JOIN cache_list_items cli ON clw.cache_list_id=cli.cache_list_id
+                  INNER JOIN caches ON cli.cache_id=caches.cache_id
+                  INNER JOIN cache_status ON caches.status=cache_status.id
+                  WHERE cli.cache_id=NEW.cache_id AND cache_status.allow_user_view=1;
+              DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+              OPEN cur1;
+              REPEAT FETCH cur1 INTO notify_user_id;
+                  IF NOT done THEN
+                      INSERT INTO watches_logqueue (log_id, user_id) VALUES (NEW.id, notify_user_id);
+                  END IF;
+              UNTIL done END REPEAT;
+              CLOSE cur1;
+              CALL sp_update_searchindex(1, NEW.cache_id);
+          END
+          ;;
+          DELIMITER ;
+          TRIGSQL
+            docker cp /tmp/fix-after-insert.sql mariadb-db-1:/tmp/
+            docker exec mariadb-db-1 bash -c "mariadb -uroot -p{{ dbpass }} oc < /tmp/fix-after-insert.sql"
 
     # ── NPM routes ──────────────────────────────────────
     - name: Wait for NPM database
