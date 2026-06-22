@@ -145,7 +145,7 @@ Regenerate with: `echo y | docker exec -i npm-nginx-proxy-manager-1 node scripts
 
 | Stack | Cookie name | Domain |
 |-------|------------|--------|
-| OC3 | `ocdevelopmentdata` | none (host-only) |
+| OC3 | `oc3_session` | none (host-only) |
 | OC4 | `oc4_session` | none (host-only) |
 | OC5 | `oc5_session` | none (host-only) |
 
