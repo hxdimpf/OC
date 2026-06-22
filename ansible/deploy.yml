@@ -2,23 +2,9 @@
 - name: OC Dev Stack Deployment
   hosts: oc_test
   become: true
-  vars_prompt:
-    - name: domain_suffix
-      prompt: "Domain suffix (e.g. baiti.net)"
-      private: false
-      default: "baiti.net"
-
-    - name: git_user_name
-      prompt: "Git user name for per-repo identity"
-      private: false
-
-    - name: git_user_email
-      prompt: "Git user email for per-repo identity"
-      private: false
-
+  vars_files:
+    - vars/config.yml
   vars:
-    github_org: "{{ lookup('env', 'OC_GITHUB_ORG') | default('hxdimpf', true) }}"
-    branch: "{{ lookup('env', 'OC_BRANCH') | default('dev-hx', true) }}"
     repo_base: /opt/repos
     stacks_base: /opt/stacks
 
@@ -63,7 +49,7 @@
     # ── SSH key for git push ────────────────────────────
     - name: Deploy persisted SSH key (survives snapshot reverts)
       copy:
-        src: files/oc_deploy_key
+        src: "{{ ssh_deploy_key | default('files/oc_deploy_key') }}"
         dest: /home/{{ ansible_user }}/.ssh/id_ed25519
         owner: "{{ ansible_user }}"
         mode: "0600"
