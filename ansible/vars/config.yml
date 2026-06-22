@@ -1,41 +1,13 @@
 ---
-# OC Stack Configuration
-# Edit this file before running ansible-playbook.
-# This is the ONLY file you need to customize for your environment.
-
-# ── Domains ─────────────────────────────────────────────────────
-# The base domain suffix. All stacks will be <name>.<domain_suffix>
 domain_suffix: "baiti.net"
-
-# ── Git ─────────────────────────────────────────────────────────
-# Your GitHub org/user and branch to deploy
 github_org: "hxdimpf"
 branch: "dev-hx"
-
-# Per-repo git identity for commits
 git_user_name: "hxdimpf"
 git_user_email: "hxdimpf@gmail.com"
-
-# ── SSH Key for GitHub ──────────────────────────────────────────
-# Path to a pre-existing ED25519 private key. If the file exists,
-# it will be deployed to the server. If it doesn't exist, the
-# playbook will generate a new one and display the public key.
-# Generate once with: ssh-keygen -t ed25519 -f deploy-key -N ""
-# Then add the .pub file to GitHub → Settings → SSH Keys
-ssh_deploy_key: "files/oc_deploy_key"  # relative to ansible/ dir
-
-# ── OKAPI Consumer Key ──────────────────────────────────────────
-# This key MUST exist in the database dump you're importing.
-# If not, create one in the okapi_consumers table after import:
-#   INSERT INTO okapi_consumers (`key`, name, secret, url, email, date_created, bflags)
-#   VALUES ('YOUR_KEY', 'Your Name', 'YOUR_SECRET', 'http://oc3.YOUR_DOMAIN', 'you@example.com', NOW(), 0);
+ssh_deploy_key: "files/oc_deploy_key"
 okapi_consumer_key: "veRTaTDvKWEZTxsAMPYd"
-
-# ── Database ────────────────────────────────────────────────────
-# Path to a gzipped database dump file (local path or URL)
-# Must contain the full OC schema with triggers, procedures, and data.
-db_dump_file: "CHANGE_ME"  # e.g. /path/to/dump.sql.gz
-
-# ── Ansible ─────────────────────────────────────────────────────
-# Target host (from inventory.ini)
+db_dump_file: "/Users/baiti/src/oc/oc_dump_20260621.sql.gz"
 target_host: "oc_test"
+okapi_access_token: "JnrNd434hXuy6LxbdjG9"
+okapi_token_secret: "sqmkJY4js7wMPyJ6PBGxhzqWA4Y9UCEzwtVh8qpZ"
+okapi_base_url: "http://okapi.baiti.net"
