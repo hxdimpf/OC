@@ -417,6 +417,13 @@
         composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
       ignore_errors: true
 
+    - name: OC4 root symlinks (maps /css /js /vendor to _frontend)
+      shell: |
+        cd {{ repo_base }}/oc4/public
+        for dir in css js vendor; do
+          ln -sfn _frontend/$dir $dir
+        done
+
     - name: Install OKAPI composer deps
       shell: |
         cd {{ repo_base }}/okapi/okapi
