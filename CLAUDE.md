@@ -136,6 +136,31 @@ NPM (Nginx Proxy Manager) routes by Host header:
 NPM config lives in SQLite: `/var/lib/docker/volumes/npm_npm_data/_data/database.sqlite`
 Regenerate with: `echo y | docker exec -i npm-nginx-proxy-manager-1 node scripts/regenerate-config`
 
+## Session Management
+
+**Three independent stacks, three independent sessions.**
+
+| Stack | Cookie name | Domain |
+|-------|------------|--------|
+| OC3 | `ocdevelopmentdata` | none (host-only) |
+| OC4 | `oc4_session` | none (host-only) |
+| OC5 | `oc5_session` | none (host-only) |
+
+All three validate against `sys_sessions` in the shared MariaDB.
+No cross-subdomain cookie sharing. Each stack requires its own login.
+
+**Why:** Chrome blocks cross-subdomain cookies on private IPs (192.168.x.x).
+Even with `.baiti.net` domain cookies, the browser refuses to send them.
+Independent host-only cookies are the only reliable approach for dev.
+
+Cookie domain is EMPTY STRING in all settings:
+- OC3: `$opt['session']['domain'] = '';` in playbook-generated `settings.inc.php`
+- OC4: `null` domain in `Auth.php` Cookie constructor
+- OC5: no domain parameter in `res.cookie()` call
+
+For production on public DNS with real certificates, cross-subdomain cookies
+can be re-enabled by setting domain to `.baiti.net`.
+
 ## oc5 specifics
 
 - Express 5, ES modules (`"type": "module"`)
@@ -143,7 +168,7 @@ Regenerate with: `echo y | docker exec -i npm-nginx-proxy-manager-1 node scripts
 - Shared frontend submodule at `public/_frontend/` (from `hxdimpf/oc-frontend`)
 - `app.js` has `format`, `number_format` filters and `range()` global
 - No helmet (dev env)
-- Auth: cookie `ocdevelopmentdata` → `sys_sessions` validation
+- Auth: `oc5_session` cookie → `sys_sessions` validation via `src/auth.js`
 - DB: MariaDB via `mariadb` npm package, connection pool in `src/db.js`
 
 ## SSL (dev only)
