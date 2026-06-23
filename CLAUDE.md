@@ -14,7 +14,6 @@ All editing, committing, and pushing happens from your Mac.
 | `hxdimpf/OC4` | `~/src/oc4` | Symfony 7.x frontend |
 | `hxdimpf/oc5` | `~/src/oc5` | Node.js/Express frontend |
 | `hxdimpf/okapi` | `~/src/okapi` | OKAPI REST API |
-| `hxdimpf/oc-frontend` | `~/src/oc-frontend` | Shared JS/CSS/vendor (standalone repo) |
 
 ### Workflow
 
@@ -25,17 +24,29 @@ All editing, committing, and pushing happens from your Mac.
 3. ssh oc3 "sudo git -C /opt/repos/oc5 pull && sudo docker restart oc5-oc5-1"
 ```
 
-**For shared frontend JS/CSS (`oc-frontend` standalone repo):**
+**For shared assets (JS, CSS, vendor, shared/coords):**
+The frontend assets live in BOTH repos directly. No separate repo. No mounts.
+When you change a shared file, apply the same change to BOTH repos:
+
+| File | OC5 path | OC4 path |
+|------|---------|---------|
+| JS modules | `oc5/public/js/*.js` | `oc4/public/_frontend/js/*.js` |
+| CSS | `oc5/public/css/*.css` | `oc4/public/_frontend/css/*.css` |
+| Vendor libs | `oc5/public/vendor/**` | `oc4/public/_frontend/vendor/**` |
+| Shared utils | `oc5/public/shared/*.js` | `oc4/public/_frontend/shared/*.js` |
+
 ```
-1. cd ~/src/oc-frontend            # edit locally (clone from hxdimpf/oc-frontend)
-2. git add -A && git commit -m "..." && git push origin dev-hx
-3. ssh oc3 "sudo git -C /opt/repos/oc-frontend pull && sudo docker restart oc4-oc4-1 oc5-oc5-1"
+1. Edit file in ~/src/oc5/public/js/cache.js      # primary dev target
+2. cp ~/src/oc5/public/js/cache.js ~/src/oc4/public/_frontend/js/cache.js
+3. cd ~/src/oc5 && git add -A && git commit -m "..." && git push origin dev-hx
+4. cd ~/src/oc4 && git add -A && git commit -m "..." && git push origin dev-hx
+5. Deploy both stacks (see below)
 ```
 
-oc-frontend is a standalone repo mounted into BOTH containers.
-No submodules. One pull updates both stacks simultaneously.
-OC4 has root symlinks: public/{css,js,vendor} → _frontend/{css,js,vendor}
-OC5 serves _frontend directly at /_frontend/ and / (root).
+**Important:** OC5 uses `public/js/` directly. OC4 uses `public/_frontend/js/`
+(matching existing template paths). Content is identical, paths differ.
+OC4 templates reference `/_frontend/js/loader.js`, OC5 templates use `/js/loader.js`.
+OC5 also serves `/_frontend/*` as a legacy fallback.
 
 **For Ansible playbook changes:**
 ```
@@ -94,9 +105,7 @@ Zero failures required before declaring "done".
 ### 4. Image paths
 
 Images live in `public/images/` and are served at `/images/` on both OC4 and OC5.
-OC5 also serves `/_frontend/images/` as a fallback for legacy paths.
-OC4 has symlinks: `_frontend/css`→`_frontend/public/css`, same for js/vendor.
-OC4 also has root-level symlinks: `public/css`→`public/_frontend/public/css`, etc.
+OC5 also serves `/_frontend/images/` and `/_frontend/*` as legacy fallback paths.
 
 ### 5. The playbook is the source of truth
 
