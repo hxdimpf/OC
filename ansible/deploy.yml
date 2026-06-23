@@ -107,7 +107,7 @@
         dest: "{{ repo_base }}/{{ item | lower }}"
         version: "{{ branch }}"
         force: true
-      loop: [OC3, OC4, oc5, okapi, oc-frontend]
+      loop: [OC3, OC4, oc5, okapi]
       register: git_clone
       retries: 3
       delay: 5
@@ -236,7 +236,6 @@
               restart: unless-stopped
               volumes:
                 - {{ repo_base }}/oc4:/var/www/html
-                - {{ repo_base }}/oc-frontend:/var/www/html/public/_frontend
               environment:
                 APACHE_DOCUMENT_ROOT: /var/www/html/public
                 APP_ENV: dev
@@ -260,7 +259,6 @@
               working_dir: /app
               volumes:
                 - {{ repo_base }}/oc5:/app
-                - {{ repo_base }}/oc-frontend:/app/public/_frontend
               command: sh -c "npm install --silent && exec node app.js"
               environment:
                 PORT: "3000"
@@ -417,12 +415,8 @@
         composer install --no-interaction --optimize-autoloader 2>&1 | tail -3
       ignore_errors: true
 
-    - name: OC4 root symlinks (maps /css /js /vendor to _frontend)
-      shell: |
-        cd {{ repo_base }}/oc4/public
-        for dir in css js vendor; do
-          ln -sfn _frontend/$dir $dir
-        done
+
+
 
     - name: Install OKAPI composer deps
       shell: |
