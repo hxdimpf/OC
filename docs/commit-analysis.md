@@ -92,5 +92,22 @@ The German opencaching.de development fork. Split by target:
 1. **Two distinct codebases**: Legacy peaked in 2022 (1389 file-touches), Symfony peaked same year (748).
 2. **The Symfony rewrite is one developer**: `fraggle-DE` wrote 85% of the Symfony code (1427/1683 touches). Nobody else came close.
 3. **2024 was dead**: 4 commits total. The project effectively stopped.
-4. **2026 spike is deceptive**: the 733 touches are from recent work (your hxdimpf contributions + fraggle-DE maintenance).
-5. **The bus factor is 1**: `fraggle-DE` IS the Symfony codebase. If he leaves, nobody knows the code.
+4. **2026 spike**: 733 touches — `teiling88` (345), `fraggle-DE` (337), `Samuel Dennler` (116). `hxdimpf` contributed 16 touches; the actual forward-looking work lives on the `hxdimpf/OC4` and `hxdimpf/oc5` forks, not upstream.
+5. **The bus factor is 1**: `fraggle-DE` wrote 85% of the Symfony code. Without him, nobody knows it.
+
+---
+
+## hxdimpf forks (OC4 + OC5) — where the forward-looking work lives
+
+Not on the upstream `oc-server3` repo. The real development is on the forks.
+
+| Repo | Branch | Commits | Period |
+|------|--------|---------|--------|
+| `hxdimpf/oc5` | dev-hx | **205** | 2026-06 |
+| `hxdimpf/OC4` | dev-hx | **26** | 2026-06 |
+| **TOTAL** | | **231** | ~3 months |
+
+For comparison:
+- Upstream `opencaching/opencaching-pl`: **16 commits** in all of 2026
+- OKAPI: **10 commits** in **7 years**
+- `hxdimpf` upstream contributions to `oc-server3`: **16 touches** (the real work is on the forks)
