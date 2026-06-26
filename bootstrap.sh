@@ -4,7 +4,7 @@ set -euo pipefail
 # OC bootstrap — one command to deploy the entire opencaching dev stack.
 #
 # Usage:
-#   git clone git@github.com:hxdimpf/OC.git && cd OC
+#   git clone git@github.com:hxdimpf/oc.git && cd OC
 #   ./bootstrap.sh your-domain-suffix.net
 #
 # What it does:

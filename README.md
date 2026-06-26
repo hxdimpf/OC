@@ -7,10 +7,10 @@ OKAPI (shared API), and MariaDB. Routed through Nginx Proxy Manager.
 
 ```bash
 # Clone everything
-git clone git@github.com:hxdimpf/OC.git
-git clone git@github.com:hxdimpf/OC3.git ../oc3
-git clone git@github.com:hxdimpf/OC4.git ../oc4
-git clone git@github.com:hxdimpf/OC5.git ../oc5
+git clone git@github.com:hxdimpf/oc.git
+git clone git@github.com:hxdimpf/oc3.git ../oc3
+git clone git@github.com:hxdimpf/oc4.git ../oc4
+git clone git@github.com:hxdimpf/oc5.git ../oc5
 git clone -b oc4-combined git@github.com:hxdimpf/okapi.git ../okapi
 cd OC
 

@@ -9,9 +9,9 @@ All editing, committing, and pushing happens from your Mac.
 
 | Repo | Local path | What it contains |
 |------|-----------|-----------------|
-| `hxdimpf/OC` | `~/src/oc` | Playbook, scripts, docs |
-| `hxdimpf/OC3` | `~/src/oc3` | Legacy PHP app |
-| `hxdimpf/OC4` | `~/src/oc4` | Symfony 7.x frontend |
+| `hxdimpf/oc` | `~/src/oc` | Playbook, scripts, docs |
+| `hxdimpf/oc3` | `~/src/oc3` | Legacy PHP app |
+| `hxdimpf/oc4` | `~/src/oc4` | Symfony 7.x frontend |
 | `hxdimpf/oc5` | `~/src/oc5` | Node.js/Express frontend |
 | `hxdimpf/okapi` | `~/src/okapi` | OKAPI REST API |
 
@@ -125,9 +125,9 @@ ansible-playbook -i inventory.ini deploy.yml \
 
 | Repo | Purpose | Branch |
 |------|---------|--------|
-| `hxdimpf/OC` | Ansible playbook, deploy scripts | `dev-hx` |
-| `hxdimpf/OC3` | Legacy PHP (Symfony 3.x) | `dev-hx` |
-| `hxdimpf/OC4` | Symfony 7.x frontend | `dev-hx` |
+| `hxdimpf/oc` | Ansible playbook, deploy scripts | `dev-hx` |
+| `hxdimpf/oc3` | Legacy PHP (Symfony 3.x) | `dev-hx` |
+| `hxdimpf/oc4` | Symfony 7.x frontend | `dev-hx` |
 | `hxdimpf/oc5` | Node.js/Express frontend | `dev-hx` |
 | `hxdimpf/okapi` | OKAPI REST API | `dev-hx` |
 
